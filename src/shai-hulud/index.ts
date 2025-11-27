@@ -9,7 +9,7 @@
  * Modes :
  *   - Sans arguments -> scan du projet local (cwd)
  *   - --repos org1/repo1,org2/repo2 -> scan de ces dépôts GitHub
- *   - --org mon-orga -> scan de tous les repos publics de l’orga
+ *   - --orgs mon-orga,autre-orga -> scan de tous les repos publics des orgs
  *
  * Fichiers supportés (local & remote) :
  *   - Node :
@@ -24,7 +24,7 @@
  *     - bun.lock (texte JSONC-like)
  *
  * CLI :
- *   --org <name>
+ *   --orgs <name1,name2>
  *   --repos owner1/repo1,owner2/repo2
  *   --json
  *   --fail-on-declared-only[=true|false]

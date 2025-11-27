@@ -3,6 +3,7 @@ import { FetcherFn, FileToAnalyze } from "./fetch-types";
 import type { ScannerEntry } from "./index";
 import { buildGithubHeaders, getGithubApiUrl } from "../utils/github";
 import { logger } from "../utils/logger";
+import pLimit from 'p-limit';
 
 async function fetchBranchSha(owner: string, repo: string, branch: string): Promise<string | null> {
   const baseUrl = getGithubApiUrl();
@@ -79,6 +80,9 @@ export const fetchRemoteTree: FetcherFn = async (ctx, scanners: ScannerEntry[]):
   const allPaths = await listAllPaths(owner, repo, branch);
   if (!allPaths.length) return files;
 
+  const limit = pLimit(5);
+  const tasks: Promise<FileToAnalyze | null>[] = [];
+
   // On veut un lookup rapide par nom de fichier pour chaque analyzer
   // (FILE_NAME_ID = ["package.json", "deno.json", ...])
   for (const [analyzer, fileNames] of scanners) {
@@ -86,18 +90,26 @@ export const fetchRemoteTree: FetcherFn = async (ctx, scanners: ScannerEntry[]):
       const matchingPaths = allPaths.filter(p => p.endsWith(`/${fileName}`) || p === fileName);
 
       for (const p of matchingPaths) {
-        const content = await fetchRemoteRaw(owner, repo, branch, p);
-        if (!content) continue;
-
-        const source = `${owner}/${repo}@${branch}:${p}`;
-        files.push({
-          analyzer,
-          filename: p,
-          source,
-          content,
-        });
+        tasks.push(
+          limit(async () => {
+            const content = await fetchRemoteRaw(owner, repo, branch, p);
+            if (!content) return null;
+            const source = `${owner}/${repo}@${branch}:${p}`;
+            return {
+              analyzer,
+              filename: p,
+              source,
+              content,
+            } as FileToAnalyze;
+          }),
+        );
       }
     }
+  }
+
+  const settled = await Promise.allSettled(tasks);
+  for (const s of settled) {
+    if (s.status === 'fulfilled' && s.value) files.push(s.value as FileToAnalyze);
   }
 
   return files;

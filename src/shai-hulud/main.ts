@@ -7,6 +7,7 @@ import { getScanners } from './scan';
 import { fetchRemoteRoot } from './scan/fetch-remote-root';
 import { fetchRemoteTree } from './scan/fetch-remote-tree';
 import { fetchAllBranchesFromUI, listOrgRepos } from './utils/github';
+import pLimit from 'p-limit';
 import { printGlobalSummary } from './utils/print';
 import { runWithConcurrency } from './utils/concurrency';
 
@@ -24,14 +25,26 @@ async function buildRemoteRepos(): Promise<{ owner: string; name: string }[]> {
 
   const orgRepos: { owner: string; name: string }[] = [];
 
-  if (config.org) {
-    const reposFromOrg = await listOrgRepos(config.org);
-    orgRepos.push(
-      ...reposFromOrg.map(r => ({
-        owner: r.owner,
-        name: r.name,
-      })),
+  // Fetch org repos in parallel but bounded by config.concurrency
+  const orgs = config.orgs ?? [];
+  if (orgs.length > 0) {
+    const limit = pLimit(Math.max(1, config.concurrency ?? 10));
+    const tasks = orgs.map(org =>
+      limit(async () => {
+        try {
+          const reposFromOrg = await listOrgRepos(org);
+          return reposFromOrg.map(r => ({ owner: r.owner, name: r.name }));
+        } catch (err) {
+          console.error(`[ERROR] listOrgRepos ${org}: ${(err as Error).message}`);
+          return [] as { owner: string; name: string }[];
+        }
+      }),
     );
+
+    const results = await Promise.all(tasks);
+    for (const arr of results) {
+      orgRepos.push(...arr);
+    }
   }
 
   const uniq = new Map<string, { owner: string; name: string }>();
@@ -108,17 +121,34 @@ async function runRemoteJobs(
     return runAnalysisOnFiles(files, affected);
   };
 
-  const nested = await runWithConcurrency(jobs, config.concurrency, task);
-  return nested.flat();
+  // Schedule jobs with p-limit and tolerate per-job failures (allSettled)
+  const limit = pLimit(Math.max(1, config.concurrency ?? 10));
+  const scheduled = jobs.map(job =>
+    limit(async () => {
+      try {
+        return await task(job);
+      } catch (err) {
+        console.error(`[ERROR] job ${job.owner}/${job.repo}@${job.branch}: ${(err as Error).message}`);
+        return [] as ScanResult[];
+      }
+    }),
+  );
+
+  const settled = await Promise.allSettled(scheduled);
+  const fulfilled = settled
+    .filter(s => s.status === 'fulfilled')
+    .map((s: any) => s.value as ScanResult[]);
+
+  return fulfilled.flat();
 }
 
 /**
  * Point final : affiche le summary puis exit code correct.
  */
 export function finalizeAndExit(
-  mode: "local" | "repos" | "org",
+  mode: "local" | "repos" | "orgs",
   ctx: {
-    org?: string;
+    orgs?: string[];
     repos?: string[];
     branches?: string[];
     allBranches?: boolean;
@@ -149,7 +179,7 @@ export async function runScan(): Promise<void> {
   const allScanResults: ScanResult[] = [];
 
   // --- Mode local ---
-  if (!config.org && config.repos.length === 0) {
+  if ((config.orgs ?? []).length === 0 && config.repos.length === 0) {
     const files = await fetchLocal({ mode: "local" }, scanners);
     const results = runAnalysisOnFiles(files, affected);
     allScanResults.push(...results);
@@ -157,14 +187,14 @@ export async function runScan(): Promise<void> {
     return finalizeAndExit("local", {}, results);
   }
 
-  // --- Mode remote (GitHub) --repos, --org, ou les deux ---
+  // --- Mode remote (GitHub) --repos, --orgs, ou les deux ---
   const jobs = await buildRemoteJobs();
 
   if (jobs.length === 0) {
     finalizeAndExit(
-      config.org && config.repos.length > 0 ? "repos" : config.org ? "org" : "repos",
+      (config.orgs && config.orgs.length > 0 && config.repos.length > 0) ? "repos" : (config.orgs && config.orgs.length > 0) ? "orgs" : "repos",
       {
-        org: config.org ?? undefined,
+        orgs: config.orgs ?? undefined,
         repos: config.repos,
         branches: config.branches,
         allBranches: config.allBranches ?? false,
@@ -176,9 +206,9 @@ export async function runScan(): Promise<void> {
   const results = await runRemoteJobs(jobs, scanners, affected);
 
   finalizeAndExit(
-    config.org && config.repos.length > 0 ? "repos" : config.org ? "org" : "repos",
+    (config.orgs && config.orgs.length > 0 && config.repos.length > 0) ? "repos" : (config.orgs && config.orgs.length > 0) ? "orgs" : "repos",
     {
-      org: config.org ?? undefined,
+      orgs: config.orgs ?? undefined,
       repos: config.repos,
       branches: config.branches,
       allBranches: config.allBranches ?? false,

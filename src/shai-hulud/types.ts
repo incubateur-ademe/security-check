@@ -30,8 +30,8 @@ export interface AnalyzeParams {
 export type AnalyzeFn = ((params: AnalyzeParams) => Match[]) & { FILE_NAME_ID: string[] };
 
 export interface JsonSummary {
-  mode: "local" | "repos" | "org";
-  org?: string | null;
+  mode: "local" | "repos" | "orgs";
+  orgs?: string[];
   repos?: string[];
   branches?: string[];
   allBranches?: boolean;
@@ -48,7 +48,7 @@ export interface JsonSummary {
 }
 
 export interface CliOptions {
-  org: string | null;
+  orgs: string[];
   repos: string[];
   branches: string[];
   allBranches: boolean;

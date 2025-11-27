@@ -1,6 +1,7 @@
 // scan/fetch-remote-root.ts
 import { FetcherFn, FileToAnalyze } from "./fetch-types";
 import type { ScannerEntry } from "./index";
+import pLimit from 'p-limit';
 
 async function fetchRemoteRawIfExists(owner: string, repo: string, branch: string, pathInRepo: string) {
   const url = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${pathInRepo}`;
@@ -25,20 +26,30 @@ export const fetchRemoteRoot: FetcherFn = async (ctx, scanners: ScannerEntry[]):
   const { owner, repo, branch } = ctx;
   const files: FileToAnalyze[] = [];
 
+  const limit = pLimit(5);
+  const tasks: Promise<FileToAnalyze | null>[] = [];
+
   for (const [analyzer, fileNames] of scanners) {
     for (const fileName of fileNames) {
-      const content = await fetchRemoteRawIfExists(owner, repo, branch, fileName);
-      if (!content) continue;
-
-      const source = `${owner}/${repo}@${branch}:${fileName}`;
-
-      files.push({
-        analyzer,
-        filename: fileName,
-        source,
-        content,
-      });
+      tasks.push(
+        limit(async () => {
+          const content = await fetchRemoteRawIfExists(owner, repo, branch, fileName);
+          if (!content) return null;
+          const source = `${owner}/${repo}@${branch}:${fileName}`;
+          return {
+            analyzer,
+            filename: fileName,
+            source,
+            content,
+          } as FileToAnalyze;
+        }),
+      );
     }
+  }
+
+  const settled = await Promise.allSettled(tasks);
+  for (const s of settled) {
+    if (s.status === 'fulfilled' && s.value) files.push(s.value as FileToAnalyze);
   }
 
   return files;

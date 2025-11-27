@@ -60,7 +60,7 @@ export function summarizeMatches(allMatches: Match[]): JsonSummary {
 export function printGlobalSummary(mode: JsonSummary["mode"], ctx: Partial<JsonSummary>, allMatches: Match[]) {
   const base = summarizeMatches(allMatches);
   base.mode = mode;
-  base.org = ctx.org ?? null;
+  base.orgs = ctx.orgs ?? [];
   base.repos = ctx.repos;
   base.branches = ctx.branches;
   base.allBranches = ctx.allBranches;
@@ -72,7 +72,7 @@ export function printGlobalSummary(mode: JsonSummary["mode"], ctx: Partial<JsonS
 
   console.log("\n============================");
   console.log(`[SUMMARY] mode=${base.mode} total_matches=${base.totalMatches} unique_packages=${base.uniquePackages}`);
-  if (base.org) console.log(`[SUMMARY] org=${base.org}`);
+  if (base.orgs && base.orgs.length > 0) console.log(`[SUMMARY] orgs=${base.orgs.join(",")}`);
   if (base.repos) console.log(`[SUMMARY] repos=${base.repos.join(",")}`);
   if (base.branches) {
     console.log(

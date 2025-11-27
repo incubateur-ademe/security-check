@@ -55,13 +55,10 @@ export async function listOrgRepos(org: string): Promise<GithubRepo[]> {
     const res = await fetch(url, { headers });
 
     if (!res.ok) {
-      const body = await res.text();
-      throw new Error(
-        `Erreur API GitHub /orgs/${org}/repos (page ${page}): ${res.status} ${res.statusText} - ${body.slice(
-          0,
-          300,
-        )}...`,
-      );
+      const body = await res.text().catch(() => "");
+      logger(1, `⚠️ Erreur API GitHub /orgs/${org}/repos (page ${page}): ${res.status} ${res.statusText} - ${body.slice(0,300)}...`);
+      // Be resilient: stop pagination and return what we collected so far for this org
+      break;
     }
 
     const data = (await res.json()) as any[];

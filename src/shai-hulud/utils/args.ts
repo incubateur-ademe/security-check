@@ -17,7 +17,6 @@ function buildYargs(args: string[]): Argv {
       // On l’expose en --version et -V (on évite -v qui est déjà utilisé).
       .version("version", "Afficher la version", VERSION)
       .alias("version", "V")
-      // On ne veut pas être ultra strict pour ne pas casser sur des flags inconnus.
       .strict(true)
       .parserConfiguration({
         "short-option-groups": false,
@@ -25,9 +24,9 @@ function buildYargs(args: string[]): Argv {
         "strip-aliased": true,
         "strip-dashed": true,
       })
-      .option("org", {
+      .option("orgs", {
         type: "string",
-        describe: "Organisation GitHub à scanner",
+        describe: "Organisation(s) GitHub à scanner (séparées par des virgules)",
       })
       .option("repos", {
         type: "string",
@@ -87,7 +86,7 @@ export function parseArgsToConfig(args: string[]): void {
   const parser = buildYargs(args);
 
   const argv = parser.parseSync() as {
-    org?: string;
+    orgs?: string | string[];
     repos?: string;
     json?: boolean;
     v?: boolean;
@@ -103,9 +102,16 @@ export function parseArgsToConfig(args: string[]): void {
 
   const opts: Partial<CliOptions> = {};
 
-  // --org
-  if (typeof argv.org === "string") {
-    opts.org = argv.org;
+  // --orgs : accept either CSV string or repeated flag => normalize to string[]
+  if (typeof argv.orgs === "string" || Array.isArray(argv.orgs)) {
+    const raw = Array.isArray(argv.orgs) ? argv.orgs.join(",") : argv.orgs;
+    const list = raw
+      .split(",")
+      .map(s => s.trim())
+      .filter(Boolean)
+      .map(s => s.toLowerCase());
+    // dedupe while preserving iteration order
+    opts.orgs = Array.from(new Set(list));
   }
 
   // --repos a/b,c/d

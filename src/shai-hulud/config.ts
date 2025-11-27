@@ -13,7 +13,7 @@ const DEFAULT_REPO_CONCURRENCY = 10;
 
 // === Options globales ===
 let defaultConfig: CliOptions = {
-  org: null,
+  orgs: [],
   repos: [],
   branches: DEFAULT_BRANCHES,
   allBranches: false,
