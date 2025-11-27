@@ -43,6 +43,7 @@
 
 import { parseArgsToConfig } from "./utils/args";
 import { runScan } from "./main"; // ou ton équivalent
+import { log } from "./utils/logger";
 
 async function main() {
   // Laisse yargs gérer --help / --version + les exit
@@ -56,6 +57,6 @@ async function main() {
 try {
   await main()
 } catch (err) {
-  console.error("Erreur pendant le scan:", err);
+  log.error("Erreur pendant le scan", { error: (err as Error).message ?? String(err) });
   process.exitCode = 2;
 }

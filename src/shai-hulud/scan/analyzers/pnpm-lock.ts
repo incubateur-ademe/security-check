@@ -1,7 +1,7 @@
 import { parse as parseYaml } from "yaml";
 import semver from "semver";
 import { AnalyzeFn, Match } from "../../types";
-import { logger } from '../../utils/logger';
+import { log } from '../../utils/logger';
 
 function registerInstalledVersion(installed: Map<string, string>, name: string, version: string) {
   if (!semver.valid(version)) return;
@@ -16,7 +16,7 @@ export const analyze: AnalyzeFn = ({ content, source, affected }) => {
   try {
     data = parseYaml(content);
   } catch {
-    logger(3, `pnpm-lock analyzer: unable to parse content as YAML, skipping file.`);
+    log.debug(`pnpm-lock analyzer: unable to parse content as YAML, skipping file.`);
     return [];
   }
 

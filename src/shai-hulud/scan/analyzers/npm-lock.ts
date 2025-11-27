@@ -1,6 +1,6 @@
 import semver from "semver";
 import { AnalyzeFn, Match } from "../../types";
-import { logger } from '../../utils/logger';
+import { log } from '../../utils/logger';
 
 function registerInstalledVersion(installed: Map<string, string>, name: string, version: string) {
   if (!semver.valid(version)) return;
@@ -15,7 +15,7 @@ export const analyze: AnalyzeFn = ({ content, source, affected }) => {
   try {
     lock = JSON.parse(content);
   } catch {
-    logger(3, `npm-lock analyzer: unable to parse content as JSON, skipping file.`);
+    log.debug(`npm-lock analyzer: unable to parse content as JSON, skipping file.`);
     return [];
   }
   const installed = new Map<string, string>();

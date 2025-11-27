@@ -1,5 +1,5 @@
 import { config } from "../config";
-import { logger } from "./logger";
+import { log } from "./logger";
 
 const GITHUB_API_URL = "https://api.github.com";
 
@@ -40,7 +40,7 @@ export async function listOrgRepos(org: string): Promise<GithubRepo[]> {
   let page = 1;
   const repos: GithubRepo[] = [];
 
-  logger(1, `🔎 Récupération des repos publics pour l’orga "${org}"...`);
+  log.error(`🔎 Récupération des repos publics pour l’orga "${org}"...`);
 
   // /orgs/:org/repos est paginé
   // type=public pour rester strict (pas de privés même avec token)
@@ -56,7 +56,7 @@ export async function listOrgRepos(org: string): Promise<GithubRepo[]> {
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      logger(1, `⚠️ Erreur API GitHub /orgs/${org}/repos (page ${page}): ${res.status} ${res.statusText} - ${body.slice(0,300)}...`);
+      log.error(`⚠️ Erreur API GitHub /orgs/${org}/repos (page ${page}): ${res.status} ${res.statusText} - ${body.slice(0,300)}...`);
       // Be resilient: stop pagination and return what we collected so far for this org
       break;
     }
@@ -81,7 +81,7 @@ export async function listOrgRepos(org: string): Promise<GithubRepo[]> {
     page++;
   }
 
-  logger(1, `🔎 ${repos.length} repo(s) public(s) trouvés pour ${org}.`);
+  log.error(`🔎 ${repos.length} repo(s) public(s) trouvés pour ${org}.`);
   return repos;
 }
 
@@ -129,16 +129,21 @@ export async function fetchAllBranchesFromUI(
       );
     }
 
-    const data = await res.json();
+    const data: unknown = await res.json();
 
-    if (!data || !data.payload || !Array.isArray(data.payload.branches)) {
+    if (!data || typeof data !== 'object') {
+      throw new Error(`Format inattendu: body non-objet depuis /branches/all.json`);
+    }
+
+    const payload = (data as any).payload;
+    if (!payload || !Array.isArray(payload.branches)) {
       throw new Error(`Format inattendu: pas de payload.branches dans /branches/all.json`);
     }
 
-    return data.payload.branches.map((b: any) => b.name).filter(Boolean);
+    return payload.branches.map((b: any) => b.name).filter(Boolean);
 
   } catch (err) {
-    console.error(`[ERROR] fetchAllBranchesFromUI ${owner}/${repo}: ${(err as Error).message}`);
+    log.error(`[ERROR] fetchAllBranchesFromUI ${owner}/${repo}: ${(err as Error).message}`);
     return []; // Fallback: on retourne vide → le code appelant pourra repasser sur les branches par défaut.
   }
 }

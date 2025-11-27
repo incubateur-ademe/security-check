@@ -10,6 +10,7 @@ import { fetchAllBranchesFromUI, listOrgRepos } from './utils/github';
 import pLimit from 'p-limit';
 import { printGlobalSummary } from './utils/print';
 import { runWithConcurrency } from './utils/concurrency';
+import { log } from './utils/logger';
 
 type RemoteScanJob = {
   owner: string;
@@ -35,7 +36,7 @@ async function buildRemoteRepos(): Promise<{ owner: string; name: string }[]> {
           const reposFromOrg = await listOrgRepos(org);
           return reposFromOrg.map(r => ({ owner: r.owner, name: r.name }));
         } catch (err) {
-          console.error(`[ERROR] listOrgRepos ${org}: ${(err as Error).message}`);
+          log.error(`[ERROR] listOrgRepos ${org}: ${(err as Error).message}`, { org, error: (err as Error).message });
           return [] as { owner: string; name: string }[];
         }
       }),
@@ -64,7 +65,7 @@ async function buildRemoteJobs(): Promise<RemoteScanJob[]> {
 
     if (config.allBranches) {
       if (!config.token) {
-        console.error(`--all-branches nécessite --token pour éviter les rate-limit GitHub UI.`);
+        log.error(`--all-branches nécessite --token pour éviter les rate-limit GitHub UI.`);
         process.exit(2);
       }
 
@@ -128,7 +129,12 @@ async function runRemoteJobs(
       try {
         return await task(job);
       } catch (err) {
-        console.error(`[ERROR] job ${job.owner}/${job.repo}@${job.branch}: ${(err as Error).message}`);
+        log.error(`[ERROR] job ${job.owner}/${job.repo}@${job.branch}: ${(err as Error).message}`, {
+          owner: job.owner,
+          repo: job.repo,
+          branch: job.branch,
+          error: (err as Error).message,
+        });
         return [] as ScanResult[];
       }
     }),

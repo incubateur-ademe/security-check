@@ -1,9 +1,9 @@
 import { CliOptions } from './types';
-import { version } from '../../package.json' with { type: 'json' };
+import pkg from '../../package.json' with { type: 'json' };
 
 let lock = false;
 
-export const VERSION = version;
+export const VERSION = (pkg as any).version;
 
 export const IOC_CSV_URL =
   "https://raw.githubusercontent.com/DataDog/indicators-of-compromise/refs/heads/main/shai-hulud-2.0/consolidated_iocs.csv";

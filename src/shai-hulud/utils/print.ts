@@ -1,5 +1,6 @@
 import { config } from '../config';
 import { ScanResult, Match, JsonSummary } from '../types';
+import { log } from './logger';
 
 /**
  * Log des vulnérabilités (si pas en mode JSON)
@@ -9,13 +10,13 @@ export function printScanResult(result: ScanResult) {
   const { label, matches, analyzed } = result;
   if (!analyzed || !matches.length) return;
 
-  console.log(`\n${label}: ⚠️ ${matches.length} paquet(s) affecté(s) / potentiellement affecté(s)`);
+  log.info(`\n${label}: ⚠️ ${matches.length} paquet(s) affecté(s) / potentiellement affecté(s)`);
   for (const m of matches) {
     const vulnVers = m.vulnerableVersions.join(", ");
     if (m.installedVersion) {
-      console.log(`  - [${m.source}] ${m.packageName}@${m.installedVersion} (versions vuln.: ${vulnVers})`);
+      log.info(`  - [${m.source}] ${m.packageName}@${m.installedVersion} (versions vuln.: ${vulnVers})`);
     } else {
-      console.log(
+      log.info(
         `  - [${m.source}] ${m.packageName} (déclaré: ${m.declaredVersion ?? "?"}) (versions vuln.: ${vulnVers})`,
       );
     }
@@ -70,22 +71,20 @@ export function printGlobalSummary(mode: JsonSummary["mode"], ctx: Partial<JsonS
     return;
   }
 
-  console.log("\n============================");
-  console.log(`[SUMMARY] mode=${base.mode} total_matches=${base.totalMatches} unique_packages=${base.uniquePackages}`);
-  if (base.orgs && base.orgs.length > 0) console.log(`[SUMMARY] orgs=${base.orgs.join(",")}`);
-  if (base.repos) console.log(`[SUMMARY] repos=${base.repos.join(",")}`);
+  log.info("\n============================");
+  log.info(`[SUMMARY] mode=${base.mode} total_matches=${base.totalMatches} unique_packages=${base.uniquePackages}`);
+  if (base.orgs && base.orgs.length > 0) log.info(`[SUMMARY] orgs=${base.orgs.join(",")}`);
+  if (base.repos) log.info(`[SUMMARY] repos=${base.repos.join(",")}`);
   if (base.branches) {
-    console.log(
+    log.info(
       `[SUMMARY] branches=${base.branches.join(",")} allBranches=${base.allBranches ? "true" : "false"}`,
     );
   }
 
   for (const [source, info] of Object.entries(base.bySource)) {
-    console.log(
-      `[SUMMARY] source="${source}" matches=${info.matches} unique_packages=${info.packages.length} packages=${info.packages.join(
-        ",",
-      )}`,
+    log.info(
+      `[SUMMARY] source="${source}" matches=${info.matches} unique_packages=${info.packages.length} packages=${info.packages.join(",")}`,
     );
   }
-  console.log("============================\n");
+  log.info("============================\n");
 }

@@ -1,6 +1,7 @@
 import { config, setConfig, VERSION } from "../config";
 import { CliOptions } from "../types";
 import yargs, { Argv } from "yargs";
+import { log } from "../utils/logger";
 
 /* -------------------------------------------------------------------------- */
 /*  Construction du parser yargs                                              */
@@ -191,9 +192,7 @@ export function parseArgsToConfig(args: string[]): void {
 
   // Règle métier : --no-root-only nécessite un token
   if (opts.rootOnly === false && !effectiveToken) {
-    console.error(
-      "Erreur: --no-root-only nécessite un token GitHub (utilise --token ou GITHUB_TOKEN).",
-    );
+    log.error("Erreur: --no-root-only nécessite un token GitHub (utilise --token ou GITHUB_TOKEN).");
     process.exit(1);
   }
 
