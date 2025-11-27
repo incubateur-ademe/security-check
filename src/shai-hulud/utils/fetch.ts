@@ -1,4 +1,6 @@
+import path from 'path';
 import { log } from './log';
+import { promises as fs } from 'fs';
 
 export async function fetchTextIfExists(url: string): Promise<string | null> {
   const res = await fetch(url, {
@@ -77,4 +79,32 @@ export async function fetchOrgRepos(org: string): Promise<Array<{ name: string; 
   }
 
   return repos;
+}
+
+// -----------
+
+export async function fetchLocalIfExists(relativePath: string): Promise<string | null> {
+  const file = path.join(process.cwd(), relativePath);
+  try {
+    return await fs.readFile(file, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchRemoteRawIfExists(
+  owner: string,
+  repo: string,
+  branch: string,
+  pathInRepo: string,
+): Promise<string | null> {
+  const url = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${pathInRepo}`;
+  const res = await fetch(url, {
+    headers: {
+      Accept: "application/vnd.github.v3.raw",
+      "User-Agent": "shai-hulud-checker",
+    },
+  });
+  if (!res.ok) return null;
+  return res.text();
 }

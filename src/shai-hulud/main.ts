@@ -1,129 +1,125 @@
 import { loadAffectedPackages } from './load-vuln';
-import { scanBunLockLocal } from './scan/bun';
-import { scanDenoConfigLocal, scanDenoLockLocal } from './scan/deno';
-import { scanNpmLockLocal } from './scan/npm';
-import { scanPackageJsonLocal } from './scan/packagejson';
-import { scanPnpmLockLocal } from './scan/pnpm';
-import { scanYarnLockLocal } from './scan/yarn1';
-import { scanRemoteRepo } from './scanner';
-import { ScanResult } from './types';
-import { computeExitCode } from './utils/common';
-import { runWithConcurrency } from './utils/concurrency';
-import { fetchOrgRepos } from './utils/fetch';
-import { printScanResult, printGlobalSummary } from './utils/print';
+import { Match, ScanResult } from './types';
 import { config } from './config';
-import { log } from './utils/log';
+import { FetchContext, FileToAnalyze } from './scan/fetch-types';
+import { fetchLocal } from './scan/fetch-local';
+import { getScanners } from './scan';
+import { fetchRemoteRoot } from './scan/fetch-remote-root';
+import { fetchRemoteTree } from './scan/fetch-remote-tree';
+import { listOrgRepos } from './utils/github';
+import { printGlobalSummary } from './utils/print';
+
+export function runAnalysisOnFiles(
+  files: FileToAnalyze[],
+  affected: Map<string, string[]>,
+): ScanResult[] {
+  const results: ScanResult[] = [];
+
+  for (const f of files) {
+    const matches: Match[] = f.analyzer({
+      content: f.content,
+      source: f.source,
+      affected,
+    });
+
+    results.push({
+      analyzed: true,
+      label: f.source,
+      matches,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Point final : affiche le summary puis exit code correct.
+ */
+export function finalizeAndExit(
+  mode: "local" | "repos" | "org",
+  ctx: {
+    org?: string;
+    repos?: string[];
+    branches?: string[];
+    allBranches?: boolean;
+  },
+  results: ScanResult[],
+): never {
+  const allMatches = results.flatMap(r => r.matches);
+
+  // summary JSON ou texte
+  printGlobalSummary(mode, ctx, allMatches);
+
+  // Gestion du `--fail-on-declared-only`
+  const hasInstalledVuln = allMatches.some(m => m.installedVersion);
+
+  let exitCode = 0;
+  if (config.failOnDeclaredOnly) {
+    // même une vuln déclarée seulement → exit 1
+    exitCode = allMatches.length > 0 ? 1 : 0;
+  } else {
+    // seulement les lockfiles → exit 1
+    exitCode = hasInstalledVuln ? 1 : 0;
+  }
+
+  process.exit(exitCode);
+}
 
 export async function runScan(): Promise<void> {
+  const scanners = await getScanners();
   const affected = await loadAffectedPackages();
+  const allScanResults = [];
 
-  // MODE 1: local
+  // --- Mode local ---
   if (!config.org && config.repos.length === 0) {
-    log(1, "\n🖥  Mode: scan du projet local (cwd)\n");
+    const files = await fetchLocal({ mode: "local" }, scanners);
+    const results = runAnalysisOnFiles(files, affected);
+    allScanResults.push(...results);
 
-    const [
-      pkgJsonResult,
-      npmLockResult,
-      shrinkwrapResult,
-      pnpmResult,
-      yarnResult,
-      denoCfgResult,
-      denoLockResult,
-      bunLockResult,
-    ] = await Promise.all([
-      scanPackageJsonLocal(affected),
-      scanNpmLockLocal(affected, "package-lock.json"),
-      scanNpmLockLocal(affected, "npm-shrinkwrap.json"),
-      scanPnpmLockLocal(affected),
-      scanYarnLockLocal(affected),
-      scanDenoConfigLocal(affected),
-      scanDenoLockLocal(affected),
-      scanBunLockLocal(affected),
-    ]);
+    return finalizeAndExit("local", {}, results);
+  }
 
-    const results = [
-      pkgJsonResult,
-      npmLockResult,
-      shrinkwrapResult,
-      pnpmResult,
-      yarnResult,
-      denoCfgResult,
-      denoLockResult,
-      bunLockResult,
-    ];
+  // --- Mode remote list of repos ---
+  if (config.repos.length > 0) {
+    for (const spec of config.repos) {
+      const [owner, repo] = spec.split("/");
 
-    for (const r of results) {
-      printScanResult(r);
+      for (const branch of config.branches) {
+        const ctx: FetchContext = config.rootOnly
+          ? { mode: "remote-root", owner, repo, branch }
+          : { mode: "remote-tree", owner, repo, branch };
+
+        const fetcher = config.rootOnly ? fetchRemoteRoot : fetchRemoteTree;
+        const files = await fetcher(ctx, scanners);
+        const results = runAnalysisOnFiles(files, affected);
+        allScanResults.push(...results);
+      }
     }
 
-    const allMatches = results.flatMap(r => r.matches);
-    printGlobalSummary("local", {}, allMatches);
-    process.exitCode = computeExitCode(allMatches);
-    return;
+    return finalizeAndExit("repos", { repos: config.repos, branches: config.branches, allBranches: config.allBranches }, allScanResults);
   }
 
-  // MODE 2: --repos
-  if (config.repos.length > 0) {
-    log(1, "\n🌐 Mode: scan de dépôts GitHub (--repos)\n");
-    log(1, `➡️  ${config.repos.length} repo(s) à analyser, concurrency=${config.concurrency}`);
-
-    const allResults: ScanResult[] = [];
-
-    await runWithConcurrency(config.repos, config.concurrency, async spec => {
-      const [owner, repo] = spec.split("/");
-      if (!owner || !repo) {
-        console.error(`⚠️ Repo invalide "${spec}", attendu: owner/repo`);
-        return;
-      }
-      const results = await scanRemoteRepo(affected, owner, repo, config.branches, config.allBranches);
-      allResults.push(...results);
-      for (const r of results) {
-        printScanResult(r);
-      }
-    });
-
-    const allMatches = allResults.flatMap(r => r.matches);
-    printGlobalSummary(
-      "repos",
-      {
-        repos: config.repos,
-        branches: config.branches,
-        allBranches: config.allBranches,
-      },
-      allMatches,
-    );
-
-    process.exitCode = computeExitCode(allMatches);
-    return;
-  }
-
-  // MODE 3: --org
+  // --- Mode org ---
   if (config.org) {
-    log(1, `\n🏢 Mode: scan de tous les repos publics de l’orga "${config.org}"\n`);
-    const orgRepos = await fetchOrgRepos(config.org);
-    log(1, `➡️ ${orgRepos.length} repo(s) public(s) trouvés pour ${config.org}.`);
+    const repos = await listOrgRepos(config.org);
 
-    const allResults: ScanResult[] = [];
+    for (const r of repos) {
+      for (const branch of config.branches) {
+        const ctx: FetchContext = config.rootOnly
+          ? { mode: "remote-root", owner: r.owner, repo: r.name, branch }
+          : { mode: "remote-tree", owner: r.owner, repo: r.name, branch };
 
-    await runWithConcurrency(orgRepos, config.concurrency, async r => {
-      const results = await scanRemoteRepo(affected, r.owner.login, r.name, config.branches, config.allBranches);
-      allResults.push(...results);
-      for (const res of results) {
-        printScanResult(res);
+        const fetcher = config.rootOnly ? fetchRemoteRoot : fetchRemoteTree;
+        const files = await fetcher(ctx, scanners);
+        const results = runAnalysisOnFiles(files, affected);
+        allScanResults.push(...results);
       }
-    });
+    }
 
-    const allMatches = allResults.flatMap(r => r.matches);
-    printGlobalSummary(
+    return finalizeAndExit(
       "org",
-      {
-        org: config.org,
-        branches: config.branches,
-        allBranches: config.allBranches,
-      },
-      allMatches,
+      { org: config.org, branches: config.branches, allBranches: config.allBranches },
+      allScanResults,
     );
-
-    process.exitCode = computeExitCode(allMatches);
   }
 }

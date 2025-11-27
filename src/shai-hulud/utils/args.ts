@@ -18,7 +18,7 @@ function buildYargs(args: string[]): Argv {
       .version("version", "Afficher la version", VERSION)
       .alias("version", "V")
       // On ne veut pas être ultra strict pour ne pas casser sur des flags inconnus.
-      .strict(false)
+      .strict(true)
       .parserConfiguration({
         "short-option-groups": false,
         "camel-case-expansion": false,
@@ -66,15 +66,17 @@ function buildYargs(args: string[]): Argv {
         type: "number",
         describe: "Nombre de dépôts scannés en parallèle (défaut: 10)",
       })
+      .option("root-only", {
+        type: "boolean",
+        default: true,
+        describe:
+          "Ne scanner que les lockfiles à la racine du repo. Utiliser --no-root-only pour scanner tout le repo (monorepos).",
+      })
+      .option("token", {
+        type: "string",
+        describe: "GitHub token utilisé pour les appels API (requis si --no-root-only)",
+      })
   );
-}
-
-/* -------------------------------------------------------------------------- */
-/*  Aide “manuelle” (au cas où tu veux l’appeler dans un test, etc.)         */
-/* -------------------------------------------------------------------------- */
-
-export function printHelp() {
-  buildYargs([]).showHelp();
 }
 
 /* -------------------------------------------------------------------------- */
@@ -95,6 +97,8 @@ export function parseArgsToConfig(args: string[]): void {
     branches?: string;
     ["fail-on-declared-only"]?: string | boolean;
     concurrency?: number;
+    ["root-only"]?: boolean;
+    token?: string;
   };
 
   const opts: Partial<CliOptions> = {};
@@ -159,6 +163,32 @@ export function parseArgsToConfig(args: string[]): void {
   // --concurrency=N
   if (typeof argv.concurrency === "number" && !Number.isNaN(argv.concurrency) && argv.concurrency > 0) {
     opts.concurrency = argv.concurrency;
+  }
+
+  // --root-only / --no-root-only
+  // yargs gère automatiquement --no-root-only -> root-only = false
+  if (typeof argv["root-only"] === "boolean") {
+    opts.rootOnly = argv["root-only"];
+  } else {
+    // fallback sur la valeur par défaut de la config
+    opts.rootOnly = config.rootOnly;
+  }
+
+  // --token (ou GITHUB_TOKEN)
+  const tokenFromArg = typeof argv.token === "string" ? argv.token.trim() : "";
+  const tokenFromEnv = typeof process.env.GITHUB_TOKEN === "string" ? process.env.GITHUB_TOKEN.trim() : "";
+  const effectiveToken = tokenFromArg || tokenFromEnv || "";
+
+  if (effectiveToken) {
+    opts.token = effectiveToken;
+  }
+
+  // Règle métier : --no-root-only nécessite un token
+  if (opts.rootOnly === false && !effectiveToken) {
+    console.error(
+      "Erreur: --no-root-only nécessite un token GitHub (utilise --token ou GITHUB_TOKEN).",
+    );
+    process.exit(1);
   }
 
   setConfig(opts);

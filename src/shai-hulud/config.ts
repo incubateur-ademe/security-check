@@ -21,6 +21,8 @@ let defaultConfig: CliOptions = {
   verbosity: 0,
   failOnDeclaredOnly: true,
   concurrency: DEFAULT_REPO_CONCURRENCY,
+  rootOnly: true,
+  token: null,
 };
 
 
