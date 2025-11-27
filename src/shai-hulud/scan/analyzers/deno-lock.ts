@@ -1,4 +1,5 @@
 import { AnalyzeFn, Match } from "../../types";
+import { logger } from '../../utils/logger';
 
 /**
  * Analyse un deno.lock (v2+) :
@@ -18,6 +19,7 @@ export const analyze: AnalyzeFn = ({ content, source, affected }) => {
   try {
     data = JSON.parse(content);
   } catch {
+    logger(3, `deno-lock analyzer: unable to parse content as JSON, skipping file.`);
     return [];
   }
 

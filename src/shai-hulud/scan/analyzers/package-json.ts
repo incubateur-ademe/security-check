@@ -1,8 +1,20 @@
 import semver from "semver";
 import { AnalyzeFn, Match } from "../../types";
+import { logger } from '../../utils/logger';
 
 export const analyze: AnalyzeFn = ({ content, source, affected }) => {
-  const pkg = JSON.parse(content);
+  let pkg: any;
+  try {
+    pkg = JSON.parse(content);
+  } catch {
+    logger(3, `package-json analyzer: unable to parse content as JSON, skipping file.`);
+    return [];
+  }
+
+  if (!pkg || typeof pkg !== "object") {
+    logger(3, `package-json analyzer: parsed content is not an object, skipping file.`);
+    return [];
+  }
   const sections = ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"] as const;
 
   const matches: Match[] = [];

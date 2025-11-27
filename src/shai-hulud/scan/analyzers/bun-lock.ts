@@ -1,4 +1,5 @@
 import { AnalyzeFn, Match } from "../../types";
+import { logger } from '../../utils/logger';
 
 /**
  * Analyse bun.lock (best-effort) :
@@ -42,7 +43,7 @@ export const analyze: AnalyzeFn = ({ content, source, affected }) => {
       }
     }
   } catch {
-    // bun.lock n'est peut-être pas du JSON, on ignore silencieusement
+    logger(3, `bun-lock analyzer: unable to parse content as JSON, skipping JSON parsing step.`);
   }
 
   // 2) Complément : specifiers npm:pkg@version dans le contenu brut

@@ -1,9 +1,9 @@
 import { IOC_CSV_URL } from './config';
 import { VulnMap } from './types';
-import { log } from './utils/log';
+import { logger } from './utils/logger';
 
 export async function loadAffectedPackages(): Promise<VulnMap> {
-  log(1, "🔍 Chargement de la liste d'IOC DataDog (Shai-Hulud 2.0)…");
+  logger(1, "🔍 Chargement de la liste d'IOC DataDog (Shai-Hulud 2.0)…");
 
   const res = await fetch(IOC_CSV_URL + `?nocache=${Date.now()}`, {
     headers: {
@@ -51,6 +51,6 @@ export async function loadAffectedPackages(): Promise<VulnMap> {
     map.set(pkgName, current);
   }
 
-  log(1, `➡️  ${map.size} paquets listés dans les IOC DataDog.`);
+  logger(1, `➡️  ${map.size} paquets listés dans les IOC DataDog.`);
   return map;
 }

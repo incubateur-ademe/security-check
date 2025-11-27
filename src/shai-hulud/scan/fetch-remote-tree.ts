@@ -2,7 +2,7 @@
 import { FetcherFn, FileToAnalyze } from "./fetch-types";
 import type { ScannerEntry } from "./index";
 import { buildGithubHeaders, getGithubApiUrl } from "../utils/github";
-import { log } from "../utils/log";
+import { logger } from "../utils/logger";
 
 async function fetchBranchSha(owner: string, repo: string, branch: string): Promise<string | null> {
   const baseUrl = getGithubApiUrl();
@@ -12,14 +12,14 @@ async function fetchBranchSha(owner: string, repo: string, branch: string): Prom
   const res = await fetch(url, { headers });
   if (!res.ok) {
     const body = await res.text();
-    log(1, `⚠️  Impossible de récupérer la ref pour ${owner}/${repo}@${branch}: ${res.status} ${res.statusText} (${body.slice(0, 200)}...)`);
+    logger(1, `⚠️  Impossible de récupérer la ref pour ${owner}/${repo}@${branch}: ${res.status} ${res.statusText} (${body.slice(0, 200)}...)`);
     return null;
   }
 
   const data = (await res.json()) as any;
   const sha = data?.object?.sha;
   if (!sha) {
-    log(1, `⚠️  Réponse /git/refs sans SHA pour ${owner}/${repo}@${branch}`);
+    logger(1, `⚠️  Réponse /git/refs sans SHA pour ${owner}/${repo}@${branch}`);
     return null;
   }
 
@@ -37,7 +37,7 @@ async function listAllPaths(owner: string, repo: string, branch: string): Promis
   const res = await fetch(url, { headers });
   if (!res.ok) {
     const body = await res.text();
-    log(
+    logger(
       1,
       `⚠️  Erreur /git/trees pour ${owner}/${repo}@${branch}: ${res.status} ${res.statusText} (${body.slice(
         0,

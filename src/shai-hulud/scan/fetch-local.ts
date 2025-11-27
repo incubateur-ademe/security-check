@@ -2,7 +2,7 @@ import { promises as fs } from "fs";
 import * as path from "path";
 import { FetcherFn, FileToAnalyze } from "./fetch-types";
 import type { ScannerEntry } from "./index";
-import { log } from "../utils/log"; // si tu as déjà un helper log
+import { logger } from "../utils/logger";
 
 async function readLocalIfExists(relativePath: string): Promise<string | null> {
   const fullPath = path.join(process.cwd(), relativePath);
@@ -28,7 +28,7 @@ export const fetchLocal: FetcherFn = async (ctx, scanners: ScannerEntry[]): Prom
     for (const fileName of fileNames) {
       const content = await readLocalIfExists(fileName);
       if (!content) {
-        log(2, `ℹ️ ${fileName} absent en local, skip.`);
+        logger(2, `ℹ️ ${fileName} absent en local, skip.`);
         continue;
       }
 

@@ -1,5 +1,5 @@
 import { config } from "../config";
-import { log } from "./log";
+import { logger } from "./logger";
 
 const GITHUB_API_URL = "https://api.github.com";
 
@@ -40,7 +40,7 @@ export async function listOrgRepos(org: string): Promise<GithubRepo[]> {
   let page = 1;
   const repos: GithubRepo[] = [];
 
-  log(1, `🔎 Récupération des repos publics pour l’orga "${org}"...`);
+  logger(1, `🔎 Récupération des repos publics pour l’orga "${org}"...`);
 
   // /orgs/:org/repos est paginé
   // type=public pour rester strict (pas de privés même avec token)
@@ -84,6 +84,65 @@ export async function listOrgRepos(org: string): Promise<GithubRepo[]> {
     page++;
   }
 
-  log(1, `🔎 ${repos.length} repo(s) public(s) trouvés pour ${org}.`);
+  logger(1, `🔎 ${repos.length} repo(s) public(s) trouvés pour ${org}.`);
   return repos;
 }
+
+/**
+ * Récupère toutes les branches visibles dans l’UI GitHub
+ * via l’endpoint non documenté /branches/all.json.
+ *
+ * Exemple de payload:
+ * {
+ *   "payload": {
+ *     "branches": [
+ *       { "name": "preprod", ... },
+ *       { "name": "NGC-2714", ... },
+ *       { "name": "main", ... }
+ *     ]
+ *   }
+ * }
+ */
+export async function fetchAllBranchesFromUI(
+  owner: string,
+  repo: string,
+  token?: string,
+): Promise<string[]> {
+  // Ce JSON provient du front de GitHub, pas de l'API REST officielle.
+  const url = `https://github.com/${owner}/${repo}/branches/all.json`;
+
+  const headers: Record<string, string> = {
+    "User-Agent": "shai-hulud-checker",
+    "Accept": "application/json",
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  try {
+    const res = await fetch(url, { headers });
+
+    if (!res.ok) {
+      if (res.status === 404) {
+        throw new Error(`Impossible de récupérer /branches/all.json pour ${owner}/${repo} (404).`);
+      }
+      throw new Error(
+        `Erreur HTTP ${res.status} ${res.statusText} sur /branches/all.json pour ${owner}/${repo}`
+      );
+    }
+
+    const data = await res.json();
+
+    if (!data || !data.payload || !Array.isArray(data.payload.branches)) {
+      throw new Error(`Format inattendu: pas de payload.branches dans /branches/all.json`);
+    }
+
+    return data.payload.branches.map((b: any) => b.name).filter(Boolean);
+
+  } catch (err) {
+    console.error(`[ERROR] fetchAllBranchesFromUI ${owner}/${repo}: ${(err as Error).message}`);
+    return []; // Fallback: on retourne vide → le code appelant pourra repasser sur les branches par défaut.
+  }
+}
+
