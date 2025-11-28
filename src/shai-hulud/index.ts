@@ -41,8 +41,8 @@
  *   - 2 : erreur de runtime (réseau, parse, etc.)
  */
 
-import { parseArgsToConfig } from "./utils/args";
 import { runScan } from "./main"; // ou ton équivalent
+import { parseArgsToConfig } from "./utils/args";
 import { log } from "./utils/logger";
 
 async function main() {
@@ -55,8 +55,10 @@ async function main() {
 }
 
 try {
-  await main()
+  await main();
 } catch (err) {
-  log.error("Erreur pendant le scan", { error: (err as Error).message ?? String(err) });
+  log.error("Erreur pendant le scan", {
+    error: (err as Error).message ?? String(err),
+  });
   process.exitCode = 2;
 }

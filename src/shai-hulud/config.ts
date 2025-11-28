@@ -1,9 +1,9 @@
-import { CliOptions } from './types';
-import pkg from '../../package.json' with { type: 'json' };
+import { version } from "../../package.json" with { type: "json" };
+import { type CliOptions } from "./types";
 
 let lock = false;
 
-export const VERSION = (pkg as any).version;
+export const VERSION = version;
 
 export const IOC_CSV_URL =
   "https://raw.githubusercontent.com/DataDog/indicators-of-compromise/refs/heads/main/shai-hulud-2.0/consolidated_iocs.csv";
@@ -25,17 +25,16 @@ let defaultConfig: CliOptions = {
   token: null,
 };
 
-
 export const setConfig = (options: Partial<CliOptions>) => {
   if (lock) throw new Error("Configuration has already been set and cannot be modified");
   lock = true;
 
   defaultConfig = { ...defaultConfig, ...options };
-}
+};
 
 export const config: CliOptions = new Proxy({} as never, {
   get(_, prop: keyof CliOptions) {
-    return {...defaultConfig}[prop];
+    return { ...defaultConfig }[prop];
   },
   set() {
     throw new Error("Configuration is read-only");

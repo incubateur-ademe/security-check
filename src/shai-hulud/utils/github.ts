@@ -56,18 +56,31 @@ export async function listOrgRepos(org: string): Promise<GithubRepo[]> {
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      log.error(`⚠️ Erreur API GitHub /orgs/${org}/repos (page ${page}): ${res.status} ${res.statusText} - ${body.slice(0,300)}...`);
+      log.error(
+        `⚠️ Erreur API GitHub /orgs/${org}/repos (page ${page}): ${res.status} ${res.statusText} - ${body.slice(0, 300)}...`,
+      );
       // Be resilient: stop pagination and return what we collected so far for this org
       break;
     }
 
-    const data = (await res.json()) as any[];
+    const data = (await res.json()) as GithubApiRepo[];
     if (!Array.isArray(data) || data.length === 0) {
       break;
     }
 
+    interface GithubApiRepoOwner {
+      login?: string;
+    }
+
+    interface GithubApiRepo {
+      owner?: GithubApiRepoOwner;
+      name?: string;
+      default_branch?: string | null;
+      archived?: boolean;
+    }
+
     for (const r of data) {
-      if (!r || typeof r !== "object") continue;
+      if (!r || typeof r !== "object" || typeof r.name !== "string") continue;
 
       repos.push({
         owner: r.owner?.login ?? org,
@@ -100,21 +113,17 @@ export async function listOrgRepos(org: string): Promise<GithubRepo[]> {
  *   }
  * }
  */
-export async function fetchAllBranchesFromUI(
-  owner: string,
-  repo: string,
-  token?: string,
-): Promise<string[]> {
+export async function fetchAllBranchesFromUI(owner: string, repo: string, token?: string): Promise<string[]> {
   // Ce JSON provient du front de GitHub, pas de l'API REST officielle.
   const url = `https://github.com/${owner}/${repo}/branches/all.json`;
 
   const headers: Record<string, string> = {
     "User-Agent": "shai-hulud-checker",
-    "Accept": "application/json",
+    Accept: "application/json",
   };
 
   if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+    headers.Authorization = `Bearer ${token}`;
   }
 
   try {
@@ -124,27 +133,30 @@ export async function fetchAllBranchesFromUI(
       if (res.status === 404) {
         throw new Error(`Impossible de récupérer /branches/all.json pour ${owner}/${repo} (404).`);
       }
-      throw new Error(
-        `Erreur HTTP ${res.status} ${res.statusText} sur /branches/all.json pour ${owner}/${repo}`
-      );
+      throw new Error(`Erreur HTTP ${res.status} ${res.statusText} sur /branches/all.json pour ${owner}/${repo}`);
     }
 
     const data: unknown = await res.json();
 
-    if (!data || typeof data !== 'object') {
+    if (!data || typeof data !== "object") {
       throw new Error(`Format inattendu: body non-objet depuis /branches/all.json`);
     }
 
-    const payload = (data as any).payload;
-    if (!payload || !Array.isArray(payload.branches)) {
+    const payload = (data as Record<string, unknown>).payload;
+    if (!payload || !Array.isArray((payload as Record<string, unknown>).branches)) {
       throw new Error(`Format inattendu: pas de payload.branches dans /branches/all.json`);
     }
 
-    return payload.branches.map((b: any) => b.name).filter(Boolean);
-
+    const branches = (payload as Record<string, unknown>).branches as unknown[];
+    return branches
+      .map(b =>
+        b && typeof b === "object" && typeof (b as Record<string, unknown>).name === "string"
+          ? (b as Record<string, unknown>).name
+          : "",
+      )
+      .filter(Boolean) as string[];
   } catch (err) {
     log.error(`[ERROR] fetchAllBranchesFromUI ${owner}/${repo}: ${(err as Error).message}`);
     return []; // Fallback: on retourne vide → le code appelant pourra repasser sur les branches par défaut.
   }
 }
-

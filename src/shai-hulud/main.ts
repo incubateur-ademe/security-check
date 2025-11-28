@@ -1,30 +1,30 @@
-import { loadAffectedPackages } from './load-vuln';
-import { Match, ScanResult } from './types';
-import { config } from './config';
-import { FileToAnalyze } from './scan/fetch-types';
-import { fetchLocal } from './scan/fetch-local';
-import { getScanners } from './scan';
-import { fetchRemoteRoot } from './scan/fetch-remote-root';
-import { fetchRemoteTree } from './scan/fetch-remote-tree';
-import { fetchAllBranchesFromUI, listOrgRepos } from './utils/github';
-import pLimit from 'p-limit';
-import { printGlobalSummary } from './utils/print';
-import { runWithConcurrency } from './utils/concurrency';
-import { log } from './utils/logger';
+import pLimit from "p-limit";
 
-type RemoteScanJob = {
+import { config } from "./config";
+import { loadAffectedPackages } from "./load-vuln";
+import { getScanners } from "./scan";
+import { fetchLocal } from "./scan/fetch-local";
+import { fetchRemoteRoot } from "./scan/fetch-remote-root";
+import { fetchRemoteTree } from "./scan/fetch-remote-tree";
+import { type FileToAnalyze } from "./scan/fetch-types";
+import { type Match, type ScanResult } from "./types";
+import { fetchAllBranchesFromUI, listOrgRepos } from "./utils/github";
+import { log } from "./utils/logger";
+import { printGlobalSummary } from "./utils/print";
+
+interface RemoteScanJob {
   owner: string;
   repo: string;
   branch: string;
-};
+}
 
-async function buildRemoteRepos(): Promise<{ owner: string; name: string }[]> {
+async function buildRemoteRepos(): Promise<Array<{ owner: string; name: string }>> {
   const explicitRepos = (config.repos ?? []).map(spec => {
     const [owner, name] = spec.split("/");
     return { owner, name };
   });
 
-  const orgRepos: { owner: string; name: string }[] = [];
+  const orgRepos: Array<{ owner: string; name: string }> = [];
 
   // Fetch org repos in parallel but bounded by config.concurrency
   const orgs = config.orgs ?? [];
@@ -36,8 +36,11 @@ async function buildRemoteRepos(): Promise<{ owner: string; name: string }[]> {
           const reposFromOrg = await listOrgRepos(org);
           return reposFromOrg.map(r => ({ owner: r.owner, name: r.name }));
         } catch (err) {
-          log.error(`[ERROR] listOrgRepos ${org}: ${(err as Error).message}`, { org, error: (err as Error).message });
-          return [] as { owner: string; name: string }[];
+          log.error(`[ERROR] listOrgRepos ${org}: ${(err as Error).message}`, {
+            org,
+            error: (err as Error).message,
+          });
+          return [] as Array<{ owner: string; name: string }>;
         }
       }),
     );
@@ -83,10 +86,7 @@ async function buildRemoteJobs(): Promise<RemoteScanJob[]> {
   return jobs;
 }
 
-export function runAnalysisOnFiles(
-  files: FileToAnalyze[],
-  affected: Map<string, string[]>,
-): ScanResult[] {
+export function runAnalysisOnFiles(files: FileToAnalyze[], affected: Map<string, string[]>): ScanResult[] {
   const results: ScanResult[] = [];
 
   for (const f of files) {
@@ -115,8 +115,18 @@ async function runRemoteJobs(
 
   const task = async (job: RemoteScanJob): Promise<ScanResult[]> => {
     const ctx = config.rootOnly
-      ? { mode: "remote-root" as const, owner: job.owner, repo: job.repo, branch: job.branch }
-      : { mode: "remote-tree" as const, owner: job.owner, repo: job.repo, branch: job.branch };
+      ? {
+          mode: "remote-root" as const,
+          owner: job.owner,
+          repo: job.repo,
+          branch: job.branch,
+        }
+      : {
+          mode: "remote-tree" as const,
+          owner: job.owner,
+          repo: job.repo,
+          branch: job.branch,
+        };
 
     const files = await fetcher(ctx, scanners);
     return runAnalysisOnFiles(files, affected);
@@ -141,9 +151,7 @@ async function runRemoteJobs(
   );
 
   const settled = await Promise.allSettled(scheduled);
-  const fulfilled = settled
-    .filter(s => s.status === 'fulfilled')
-    .map((s: any) => s.value as ScanResult[]);
+  const fulfilled = settled.filter(s => s.status === "fulfilled").map(s => s.value);
 
   return fulfilled.flat();
 }
@@ -152,7 +160,7 @@ async function runRemoteJobs(
  * Point final : affiche le summary puis exit code correct.
  */
 export function finalizeAndExit(
-  mode: "local" | "repos" | "orgs",
+  mode: "local" | "orgs" | "repos",
   ctx: {
     orgs?: string[];
     repos?: string[];
@@ -198,7 +206,11 @@ export async function runScan(): Promise<void> {
 
   if (jobs.length === 0) {
     finalizeAndExit(
-      (config.orgs && config.orgs.length > 0 && config.repos.length > 0) ? "repos" : (config.orgs && config.orgs.length > 0) ? "orgs" : "repos",
+      config.orgs && config.orgs.length > 0 && config.repos.length > 0
+        ? "repos"
+        : config.orgs && config.orgs.length > 0
+          ? "orgs"
+          : "repos",
       {
         orgs: config.orgs ?? undefined,
         repos: config.repos,
@@ -212,7 +224,11 @@ export async function runScan(): Promise<void> {
   const results = await runRemoteJobs(jobs, scanners, affected);
 
   finalizeAndExit(
-    (config.orgs && config.orgs.length > 0 && config.repos.length > 0) ? "repos" : (config.orgs && config.orgs.length > 0) ? "orgs" : "repos",
+    config.orgs && config.orgs.length > 0 && config.repos.length > 0
+      ? "repos"
+      : config.orgs && config.orgs.length > 0
+        ? "orgs"
+        : "repos",
     {
       orgs: config.orgs ?? undefined,
       repos: config.repos,

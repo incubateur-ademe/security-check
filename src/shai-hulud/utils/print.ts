@@ -1,6 +1,6 @@
-import { config } from '../config';
-import { ScanResult, Match, JsonSummary } from '../types';
-import { log } from './logger';
+import { config } from "../config";
+import { type JsonSummary, type Match, type ScanResult } from "../types";
+import { log } from "./logger";
 
 /**
  * Log des vulnérabilités (si pas en mode JSON)
@@ -35,7 +35,10 @@ export function summarizeMatches(allMatches: Match[]): JsonSummary {
   >();
 
   for (const m of allMatches) {
-    const entry = bySource.get(m.source) ?? { matches: 0, packages: new Set<string>() };
+    const entry = bySource.get(m.source) ?? {
+      matches: 0,
+      packages: new Set<string>(),
+    };
     entry.matches++;
     entry.packages.add(m.packageName);
     bySource.set(m.source, entry);
@@ -76,9 +79,7 @@ export function printGlobalSummary(mode: JsonSummary["mode"], ctx: Partial<JsonS
   if (base.orgs && base.orgs.length > 0) log.info(`[SUMMARY] orgs=${base.orgs.join(",")}`);
   if (base.repos) log.info(`[SUMMARY] repos=${base.repos.join(",")}`);
   if (base.branches) {
-    log.info(
-      `[SUMMARY] branches=${base.branches.join(",")} allBranches=${base.allBranches ? "true" : "false"}`,
-    );
+    log.info(`[SUMMARY] branches=${base.branches.join(",")} allBranches=${base.allBranches ? "true" : "false"}`);
   }
 
   for (const [source, info] of Object.entries(base.bySource)) {

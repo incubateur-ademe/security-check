@@ -1,13 +1,9 @@
-export async function runWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T) => Promise<R>,
-): Promise<R[]> {
+export async function runWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   if (items.length === 0) return [];
 
   const queue = items.map((item, index) => ({ item, index }));
-  const workers: Promise<void>[] = [];
-  const results: R[] = new Array(items.length);
+  const workers: Array<Promise<void>> = [];
+  const results = new Array<R>(items.length);
 
   const worker = async () => {
     while (queue.length) {

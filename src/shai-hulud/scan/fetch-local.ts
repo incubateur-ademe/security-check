@@ -1,8 +1,9 @@
 import { promises as fs } from "fs";
 import * as path from "path";
-import { FetcherFn, FileToAnalyze } from "./fetch-types";
-import type { ScannerEntry } from "./index";
+
 import { log } from "../utils/logger";
+import { type FetcherFn, type FileToAnalyze } from "./fetch-types";
+import { type ScannerEntry } from "./index";
 
 async function readLocalIfExists(relativePath: string): Promise<string | null> {
   const fullPath = path.join(process.cwd(), relativePath);

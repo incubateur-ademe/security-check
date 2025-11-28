@@ -1,7 +1,23 @@
-import { parse as parseYaml } from "yaml";
 import semver from "semver";
-import { AnalyzeFn, Match } from "../../types";
-import { log } from '../../utils/logger';
+import { parse as parseYaml } from "yaml";
+
+import { type AnalyzeFn, type Match } from "../../types";
+import { log } from "../../utils/logger";
+
+interface PnpmLockedPackage {
+  resolution?: {
+    integrity?: string;
+  };
+  dependencies?: Record<string, string>;
+  dev?: boolean;
+  optional?: boolean;
+}
+
+interface PnpmLockData {
+  lockfileVersion?: number | string;
+  packages?: Record<string, PnpmLockedPackage>;
+  dependencies?: Record<string, string>;
+}
 
 function registerInstalledVersion(installed: Map<string, string>, name: string, version: string) {
   if (!semver.valid(version)) return;
@@ -12,9 +28,13 @@ function registerInstalledVersion(installed: Map<string, string>, name: string, 
 }
 
 export const analyze: AnalyzeFn = ({ content, source, affected }) => {
-  let data: any;
+  let data: PnpmLockData;
   try {
-    data = parseYaml(content);
+    const parsed = parseYaml(content) as unknown;
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error("pnpm-lock: parsed YAML is not an object");
+    }
+    data = parsed as PnpmLockData;
   } catch {
     log.debug(`pnpm-lock analyzer: unable to parse content as YAML, skipping file.`);
     return [];
@@ -23,9 +43,14 @@ export const analyze: AnalyzeFn = ({ content, source, affected }) => {
   const installed = new Map<string, string>();
 
   // pnpm v6/v7+
-  const pkgs = data?.packages || data?.dependencies || {};
-  for (const [key, info] of Object.entries<any>(pkgs)) {
-    const match = key.match(/^\/(.+?)@([^@]+)$/);
+  const pkgs = data.packages ?? data.dependencies;
+
+  if (!pkgs) {
+    return [];
+  }
+
+  for (const key of Object.keys(pkgs)) {
+    const match = /^\/(.+?)@([^@]+)$/.exec(key);
     if (!match) continue;
     const [, name, version] = match;
     if (!semver.valid(version)) continue;

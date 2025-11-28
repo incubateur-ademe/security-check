@@ -1,5 +1,15 @@
-import { AnalyzeFn, Match } from "../../types";
-import { log } from '../../utils/logger';
+import { type AnalyzeFn, type Match } from "../../types";
+import { parseJsonLoose } from "../../utils/common";
+import { log } from "../../utils/logger";
+
+interface DenoLockPackages {
+  npm?: Record<string, unknown>;
+}
+
+interface DenoLockV2 {
+  version: "2";
+  packages: DenoLockPackages;
+}
 
 /**
  * Analyse un deno.lock (v2+) :
@@ -15,15 +25,15 @@ import { log } from '../../utils/logger';
  * }
  */
 export const analyze: AnalyzeFn = ({ content, source, affected }) => {
-  let data: any;
+  let data: DenoLockV2 | undefined;
   try {
-    data = JSON.parse(content);
+    data = parseJsonLoose<DenoLockV2>(content);
   } catch {
     log.debug(`deno-lock analyzer: unable to parse content as JSON, skipping file.`);
     return [];
   }
 
-  const npmPkgs: Record<string, any> | undefined = data?.packages?.npm;
+  const npmPkgs: Record<string, unknown> | undefined = data?.packages?.npm;
   if (!npmPkgs || typeof npmPkgs !== "object") return [];
 
   const matches: Match[] = [];

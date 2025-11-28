@@ -1,5 +1,5 @@
-import { AnalyzeFn } from "../types";
-import type { ScannerEntry } from "./index";
+import { type AnalyzeFn } from "../types";
+import { type ScannerEntry } from "./index";
 
 /**
  * Un fichier prêt à être analysé.

@@ -1,6 +1,8 @@
 import semver from "semver";
-import { AnalyzeFn, Match } from "../../types";
-import { log } from '../../utils/logger';
+
+import { type AnalyzeFn, type Match } from "../../types";
+import { parseJsonLoose } from "../../utils/common";
+import { log } from "../../utils/logger";
 
 function registerInstalledVersion(installed: Map<string, string>, name: string, version: string) {
   if (!semver.valid(version)) return;
@@ -11,42 +13,44 @@ function registerInstalledVersion(installed: Map<string, string>, name: string, 
 }
 
 export const analyze: AnalyzeFn = ({ content, source, affected }) => {
-  let lock;
+  let lock: unknown;
   try {
-    lock = JSON.parse(content);
+    lock = parseJsonLoose<Record<string, unknown>>(content);
   } catch {
     log.debug(`npm-lock analyzer: unable to parse content as JSON, skipping file.`);
     return [];
   }
   const installed = new Map<string, string>();
-
-  function walkDeps(deps: any) {
+  function walkDeps(deps: unknown) {
     if (!deps || typeof deps !== "object") return;
-    for (const [name, info] of Object.entries<any>(deps)) {
+    for (const [name, info] of Object.entries(deps as Record<string, unknown>)) {
       if (!info || typeof info !== "object") continue;
-      if (typeof info.version === "string" && semver.valid(info.version)) {
-        registerInstalledVersion(installed, name, info.version);
+      const infoObj = info as Record<string, unknown>;
+      if (typeof infoObj.version === "string" && semver.valid(infoObj.version)) {
+        registerInstalledVersion(installed, name, infoObj.version);
       }
-      if (info.dependencies) {
-        walkDeps(info.dependencies);
+      if (infoObj.dependencies) {
+        walkDeps(infoObj.dependencies);
       }
     }
   }
 
   // v1
-  if (lock.dependencies) {
-    walkDeps(lock.dependencies);
+  if (lock && typeof lock === "object" && (lock as Record<string, unknown>).dependencies) {
+    walkDeps((lock as Record<string, unknown>).dependencies);
   }
-
   // v2/v3 : lock.packages
-  if (lock.packages && typeof lock.packages === "object") {
-    for (const [key, pkgInfo] of Object.entries<any>(lock.packages)) {
-      if (!pkgInfo || typeof pkgInfo !== "object" || typeof pkgInfo.version !== "string") continue;
+  const packagesObj = lock && typeof lock === "object" ? (lock as Record<string, unknown>).packages : undefined;
+  if (packagesObj && typeof packagesObj === "object") {
+    for (const [key, pkgInfo] of Object.entries(packagesObj as Record<string, unknown>)) {
+      if (!pkgInfo || typeof pkgInfo !== "object") continue;
+      const pkgInfoObj = pkgInfo as Record<string, unknown>;
+      if (typeof pkgInfoObj.version !== "string") continue;
       if (!key) continue;
       const parts = key.split("node_modules/");
       const name = parts[parts.length - 1];
-      if (!name || !semver.valid(pkgInfo.version)) continue;
-      registerInstalledVersion(installed, name, pkgInfo.version);
+      if (!name || !semver.valid(pkgInfoObj.version)) continue;
+      registerInstalledVersion(installed, name, pkgInfoObj.version);
     }
   }
 

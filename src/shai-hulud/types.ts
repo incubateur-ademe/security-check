@@ -27,10 +27,12 @@ export interface AnalyzeParams {
  * Analyseur "pur" : ne fait AUCUN I/O, prend juste du texte + contexte
  * et retourne les matches.
  */
-export type AnalyzeFn = ((params: AnalyzeParams) => Match[]) & { FILE_NAME_ID: string[] };
+export type AnalyzeFn = ((params: AnalyzeParams) => Match[]) & {
+  FILE_NAME_ID: string[];
+};
 
 export interface JsonSummary {
-  mode: "local" | "repos" | "orgs";
+  mode: "local" | "orgs" | "repos";
   orgs?: string[];
   repos?: string[];
   branches?: string[];

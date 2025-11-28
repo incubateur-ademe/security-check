@@ -1,4 +1,4 @@
-import { AnalyzeFn } from "../types";
+import { type AnalyzeFn } from "../types";
 
 /**
  * Identifiant logique du type de fichier analysé
@@ -14,7 +14,7 @@ export const ScannerId = [
   "yarn-lock",
 ] as const;
 
-type ScannerModule = {
+interface ScannerModule {
   default: AnalyzeFn;
 }
 
@@ -23,10 +23,11 @@ export type ScannerEntry = [analyzer: AnalyzeFn, fileNames: string[]];
 /**
  * Charge dynamiquement tous les scanners disponibles.
  */
-export const getScanners = async (): Promise<ScannerEntry[]> => Promise.all(
-  ScannerId.map(async (id) => {
-    const p = (await import(`./analyzers/${id}`) as ScannerModule).default;
+export const getScanners = async (): Promise<ScannerEntry[]> =>
+  Promise.all(
+    ScannerId.map(async id => {
+      const p = ((await import(`./analyzers/${id}`)) as ScannerModule).default;
 
-    return [p, p.FILE_NAME_ID];
-  })
-)
+      return [p, p.FILE_NAME_ID];
+    }),
+  );

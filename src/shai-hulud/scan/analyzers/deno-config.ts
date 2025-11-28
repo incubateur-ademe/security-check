@@ -1,4 +1,4 @@
-import { AnalyzeFn, Match } from "../../types";
+import { type AnalyzeFn, type Match } from "../../types";
 
 /**
  * Analyse deno.json / deno.jsonc :

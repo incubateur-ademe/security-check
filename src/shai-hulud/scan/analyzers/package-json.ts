@@ -1,11 +1,13 @@
 import semver from "semver";
-import { AnalyzeFn, Match } from "../../types";
-import { log } from '../../utils/logger';
+
+import { type AnalyzeFn, type Match } from "../../types";
+import { parseJsonLoose } from "../../utils/common";
+import { log } from "../../utils/logger";
 
 export const analyze: AnalyzeFn = ({ content, source, affected }) => {
-  let pkg: any;
+  let pkg: unknown;
   try {
-    pkg = JSON.parse(content);
+    pkg = parseJsonLoose<Record<string, unknown>>(content);
   } catch {
     log.debug(`package-json analyzer: unable to parse content as JSON, skipping file.`);
     return [];
@@ -20,7 +22,7 @@ export const analyze: AnalyzeFn = ({ content, source, affected }) => {
   const matches: Match[] = [];
 
   for (const section of sections) {
-    const deps = pkg[section as never] as Record<string, string> | undefined;
+    const deps = (pkg as Record<string, unknown>)[section] as Record<string, string> | undefined;
     if (!deps || typeof deps !== "object") continue;
 
     for (const [name, rangeSpec] of Object.entries<string>(deps)) {

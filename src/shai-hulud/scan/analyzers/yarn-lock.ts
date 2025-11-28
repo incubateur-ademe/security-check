@@ -1,5 +1,6 @@
 import semver from "semver";
-import { AnalyzeFn, Match } from "../../types";
+
+import { type AnalyzeFn, type Match } from "../../types";
 
 function registerInstalledVersion(installed: Map<string, string>, name: string, version: string) {
   if (!semver.valid(version)) return;
@@ -44,7 +45,7 @@ export const analyze: AnalyzeFn = ({ content, source, affected }) => {
       // Cherche la ligne "version"
       while (j < lines.length && /^\s/.test(lines[j])) {
         const l = lines[j].trim();
-        const m = l.match(/^version\s*[: ]\s*"?([^"\s]+)"?/);
+        const m = /^version\s*[: ]\s*"?([^"\s]+)"?/.exec(l);
         if (m) {
           version = m[1];
           break;

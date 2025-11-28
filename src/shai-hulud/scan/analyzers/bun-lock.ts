@@ -1,5 +1,6 @@
-import { AnalyzeFn, Match } from "../../types";
-import { log } from '../../utils/logger';
+import { type AnalyzeFn, type Match } from "../../types";
+import { parseJsonLoose } from "../../utils/common";
+import { log } from "../../utils/logger";
 
 /**
  * Analyse bun.lock (best-effort) :
@@ -15,8 +16,8 @@ export const analyze: AnalyzeFn = ({ content, source, affected }) => {
 
   // 1) Essai parse JSON et lecture de packages
   try {
-    const data: any = JSON.parse(content);
-    const pkgs = data?.packages;
+    const data = parseJsonLoose<Record<string, unknown>>(content);
+    const pkgs = data && typeof data === "object" ? data.packages : undefined;
     if (pkgs && typeof pkgs === "object") {
       for (const key of Object.keys(pkgs)) {
         const atIndex = key.lastIndexOf("@");

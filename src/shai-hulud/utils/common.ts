@@ -1,6 +1,7 @@
 import semver from "semver";
-import { Match, ScanResult } from '../types';
-import { config } from '../config';
+
+import { config } from "../config";
+import { type Match, type ScanResult } from "../types";
 
 export function registerInstalledVersion(installed: Map<string, string>, name: string, version: string) {
   if (!semver.valid(version)) return;
@@ -15,12 +16,12 @@ export function createScanResult(label: string, matches: Match[], analyzed: bool
   return { label, matches, analyzed };
 }
 
-export function parseJsonLoose<T = any>(raw: string): T {
+export function parseJsonLoose<T = unknown>(raw: string): T {
   try {
-    return JSON.parse(raw) as T;
+    return JSON.parse(raw) as unknown as T;
   } catch {
     const cleaned = raw.replace(/,\s*([}\]])/g, "$1");
-    return JSON.parse(cleaned) as T;
+    return JSON.parse(cleaned) as unknown as T;
   }
 }
 

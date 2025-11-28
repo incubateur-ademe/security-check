@@ -1,6 +1,6 @@
-import { IOC_CSV_URL } from './config';
-import { VulnMap } from './types';
-import { log } from './utils/logger';
+import { IOC_CSV_URL } from "./config";
+import { type VulnMap } from "./types";
+import { log } from "./utils/logger";
 
 export async function loadAffectedPackages(): Promise<VulnMap> {
   log.error("🔍 Chargement de la liste d'IOC DataDog (Shai-Hulud 2.0)…");
@@ -30,7 +30,7 @@ export async function loadAffectedPackages(): Promise<VulnMap> {
       continue;
     }
 
-    const m = line.match(/^([^,]+),([^,]+),(.*)$/);
+    const m = /^([^,]+),([^,]+),(.*)$/.exec(line);
     if (!m) continue;
 
     const pkgName = m[1].trim();

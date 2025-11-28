@@ -1,9 +1,10 @@
 // scan/fetch-remote-tree.ts
-import { FetcherFn, FileToAnalyze } from "./fetch-types";
-import type { ScannerEntry } from "./index";
+import pLimit from "p-limit";
+
 import { buildGithubHeaders, getGithubApiUrl } from "../utils/github";
 import { log } from "../utils/logger";
-import pLimit from 'p-limit';
+import { type FetcherFn, type FileToAnalyze } from "./fetch-types";
+import { type ScannerEntry } from "./index";
 
 async function fetchBranchSha(owner: string, repo: string, branch: string): Promise<string | null> {
   const baseUrl = getGithubApiUrl();
@@ -11,14 +12,16 @@ async function fetchBranchSha(owner: string, repo: string, branch: string): Prom
   const url = `${baseUrl}/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(branch)}`;
 
   const res = await fetch(url, { headers });
-    if (!res.ok) {
+  if (!res.ok) {
     const body = await res.text();
-    log.error(`⚠️  Impossible de récupérer la ref pour ${owner}/${repo}@${branch}: ${res.status} ${res.statusText} (${body.slice(0, 200)}...)`);
+    log.error(
+      `⚠️  Impossible de récupérer la ref pour ${owner}/${repo}@${branch}: ${res.status} ${res.statusText} (${body.slice(0, 200)}...)`,
+    );
     return null;
   }
 
-  const data = (await res.json()) as any;
-  const sha = data?.object?.sha;
+  const data = (await res.json()) as { object?: { sha?: string } };
+  const sha = data.object?.sha;
   if (!sha) {
     log.error(`⚠️  Réponse /git/refs sans SHA pour ${owner}/${repo}@${branch}`);
     return null;
@@ -36,7 +39,7 @@ async function listAllPaths(owner: string, repo: string, branch: string): Promis
   const url = `${baseUrl}/repos/${owner}/${repo}/git/trees/${sha}?recursive=1`;
 
   const res = await fetch(url, { headers });
-    if (!res.ok) {
+  if (!res.ok) {
     const body = await res.text();
     log.error(
       `⚠️  Erreur /git/trees pour ${owner}/${repo}@${branch}: ${res.status} ${res.statusText} (${body.slice(
@@ -47,10 +50,15 @@ async function listAllPaths(owner: string, repo: string, branch: string): Promis
     return [];
   }
 
-  const data = (await res.json()) as any;
-  const tree: Array<{ path: string; type: string }> = data?.tree ?? [];
-
-  return tree.filter(i => i.type === "blob" && typeof i.path === "string").map(i => i.path);
+  const data = (await res.json()) as { tree?: Array<{ path?: string; type?: string }> };
+  const tree =
+    data.tree
+      ?.filter(i => i.type === "blob" && typeof i.path === "string")
+      .map(i => ({
+        path: i.path!,
+        type: i.type!,
+      })) ?? [];
+  return tree.map(i => i.path);
 }
 
 async function fetchRemoteRaw(owner: string, repo: string, branch: string, pathInRepo: string) {
@@ -80,7 +88,7 @@ export const fetchRemoteTree: FetcherFn = async (ctx, scanners: ScannerEntry[]):
   if (!allPaths.length) return files;
 
   const limit = pLimit(5);
-  const tasks: Promise<FileToAnalyze | null>[] = [];
+  const tasks: Array<Promise<FileToAnalyze | null>> = [];
 
   // On veut un lookup rapide par nom de fichier pour chaque analyzer
   // (FILE_NAME_ID = ["package.json", "deno.json", ...])
@@ -108,7 +116,7 @@ export const fetchRemoteTree: FetcherFn = async (ctx, scanners: ScannerEntry[]):
 
   const settled = await Promise.allSettled(tasks);
   for (const s of settled) {
-    if (s.status === 'fulfilled' && s.value) files.push(s.value as FileToAnalyze);
+    if (s.status === "fulfilled" && s.value) files.push(s.value);
   }
 
   return files;
