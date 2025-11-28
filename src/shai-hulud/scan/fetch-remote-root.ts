@@ -41,6 +41,8 @@ export const fetchRemoteRoot: FetcherFn = async (ctx, scanners: ScannerEntry[]):
             analyzer,
             filename: fileName,
             source,
+            requestedBranch: branch,
+            resolvedBranch: branch,
             content,
           } as FileToAnalyze;
         }),

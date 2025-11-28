@@ -12,6 +12,8 @@ export interface FileToAnalyze {
   analyzer: AnalyzeFn;
   filename: string;
   source: string;
+  requestedBranch?: string;
+  resolvedBranch?: string;
   content: string;
 }
 

@@ -1,6 +1,8 @@
+import { inspect } from "util";
+
 import { config } from "../config";
 import { type JsonSummary, type Match, type ScanResult } from "../types";
-import { log } from "./logger";
+import { consoleString, log } from "./logger";
 
 /**
  * Log des vulnérabilités (si pas en mode JSON)
@@ -61,6 +63,69 @@ export function summarizeMatches(allMatches: Match[]): JsonSummary {
   };
 }
 
+function printForMachine(base: JsonSummary) {
+  const output = [] as string[];
+  output.push("--- Machine readable ---");
+  output.push("-- Infos");
+  output.push(`mode=${base.mode}`);
+  output.push(`total_matches=${base.totalMatches}`);
+  output.push(`unique_packages=${base.uniquePackages}`);
+
+  if (base.orgs && base.orgs.length > 0) {
+    output.push(`orgs=${base.orgs.join(",")}`);
+  }
+
+  if (base.repos && base.repos.length > 0) {
+    output.push(`repos=${base.repos.join(",")}`);
+  }
+
+  if (!base.allBranches && base.branches && base.branches.length > 0) {
+    output.push(`branches=${base.branches.join(",")}`);
+  } else if (base.allBranches) {
+    output.push(`all_branches=true`);
+  }
+  output.push("-- Scan Results");
+  for (const [source, info] of Object.entries(base.bySource)) {
+    output.push(
+      `source="${source}" matches=${info.matches} unique_packages=${info.packages.length} packages=${info.packages.join(",")}`,
+    );
+  }
+
+  output.push("-----------------------");
+
+  log.info(output.join("\n"));
+}
+
+function printForHuman(base: JsonSummary, allMatches: Match[]) {
+  const output = [] as string[];
+  output.push("--- Human readable ---");
+  output.push("-- Infos");
+  const { bySource, matches: _, ...rest } = base;
+  output.push(inspect(rest, { depth: null, colors: true }));
+
+  output.push("----- Details des paquets vulnérables -----");
+  output.push(
+    consoleString.table(
+      Object.entries(bySource)
+        .map(([source, info]) => {
+          const matchesForSource = allMatches.filter(m => m.source === source);
+          // include vulnVers, installed, declared like below
+          return matchesForSource.map(m => ({
+            source,
+            info: `${info.matches} match(es), ${info.packages.length} paquet(s) unique(s)`,
+            packageName: m.packageName,
+            installedVersion: m.installedVersion ?? "n/a",
+            declaredVersion: m.declaredVersion ?? "n/a",
+            vulnerableVersions: m.vulnerableVersions.join(", "),
+          }));
+        })
+        .flat(),
+    ),
+  );
+
+  log.info(output.join("\n"));
+}
+
 export function printGlobalSummary(mode: JsonSummary["mode"], ctx: Partial<JsonSummary>, allMatches: Match[]) {
   const base = summarizeMatches(allMatches);
   base.mode = mode;
@@ -74,18 +139,12 @@ export function printGlobalSummary(mode: JsonSummary["mode"], ctx: Partial<JsonS
     return;
   }
 
-  log.info("\n============================");
-  log.info(`[SUMMARY] mode=${base.mode} total_matches=${base.totalMatches} unique_packages=${base.uniquePackages}`);
-  if (base.orgs && base.orgs.length > 0) log.info(`[SUMMARY] orgs=${base.orgs.join(",")}`);
-  if (base.repos) log.info(`[SUMMARY] repos=${base.repos.join(",")}`);
-  if (base.branches) {
-    log.info(`[SUMMARY] branches=${base.branches.join(",")} allBranches=${base.allBranches ? "true" : "false"}`);
-  }
+  // Bloc 1 : TL;DR "grep-able" (WARN)
+  log.info("============================");
+  printForMachine(base);
 
-  for (const [source, info] of Object.entries(base.bySource)) {
-    log.info(
-      `[SUMMARY] source="${source}" matches=${info.matches} unique_packages=${info.packages.length} packages=${info.packages.join(",")}`,
-    );
-  }
-  log.info("============================\n");
+  // Bloc 2 : vue plus humaine (INFO)
+  printForHuman(base, allMatches);
+
+  log.info("============================");
 }

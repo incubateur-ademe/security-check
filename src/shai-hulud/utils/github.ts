@@ -40,7 +40,7 @@ export async function listOrgRepos(org: string): Promise<GithubRepo[]> {
   let page = 1;
   const repos: GithubRepo[] = [];
 
-  log.error(`🔎 Récupération des repos publics pour l’orga "${org}"...`);
+  log.info(`🔎 Récupération des repos publics pour l’orga "${org}"...`);
 
   // /orgs/:org/repos est paginé
   // type=public pour rester strict (pas de privés même avec token)
@@ -56,7 +56,7 @@ export async function listOrgRepos(org: string): Promise<GithubRepo[]> {
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      log.error(
+      log.warn(
         `⚠️ Erreur API GitHub /orgs/${org}/repos (page ${page}): ${res.status} ${res.statusText} - ${body.slice(0, 300)}...`,
       );
       // Be resilient: stop pagination and return what we collected so far for this org
@@ -94,7 +94,7 @@ export async function listOrgRepos(org: string): Promise<GithubRepo[]> {
     page++;
   }
 
-  log.error(`🔎 ${repos.length} repo(s) public(s) trouvés pour ${org}.`);
+  log.info(`🔎 ${repos.length} repo(s) public(s) trouvés pour ${org}.`);
   return repos;
 }
 

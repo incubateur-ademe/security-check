@@ -6,37 +6,53 @@ import { log } from "../utils/logger";
 import { type FetcherFn, type FileToAnalyze } from "./fetch-types";
 import { type ScannerEntry } from "./index";
 
-async function fetchBranchSha(owner: string, repo: string, branch: string): Promise<string | null> {
+async function fetchBranchSha(
+  owner: string,
+  repo: string,
+  branch: string,
+): Promise<{ sha: string; resolvedRef: string } | null> {
   const baseUrl = getGithubApiUrl();
   const headers = buildGithubHeaders();
   const url = `${baseUrl}/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(branch)}`;
 
   const res = await fetch(url, { headers });
   if (!res.ok) {
-    const body = await res.text();
-    log.error(
-      `⚠️  Impossible de récupérer la ref pour ${owner}/${repo}@${branch}: ${res.status} ${res.statusText} (${body.slice(0, 200)}...)`,
-    );
+    if (res.status !== 404) {
+      const body = await res.text();
+      log.warn(
+        `⚠️  Impossible de récupérer la ref pour ${owner}/${repo}@${branch}: ${res.status} ${res.statusText} (${body.slice(0, 200)}...)`,
+      );
+    }
     return null;
   }
 
-  const data = (await res.json()) as { object?: { sha?: string } };
+  interface GitRefResponse {
+    object?: { sha?: string };
+    ref?: string;
+  }
+  const _data = (await res.json()) as GitRefResponse | [GitRefResponse];
+  const data = Array.isArray(_data) ? _data[0] : _data;
   const sha = data.object?.sha;
   if (!sha) {
-    log.error(`⚠️  Réponse /git/refs sans SHA pour ${owner}/${repo}@${branch}`);
+    log.warn(`⚠️  Réponse /git/refs sans SHA pour ${owner}/${repo}@${branch}`);
     return null;
   }
 
-  return sha;
+  const resolvedRef = data.ref ?? `refs/heads/${branch}`;
+  return { sha, resolvedRef };
 }
 
-async function listAllPaths(owner: string, repo: string, branch: string): Promise<string[]> {
-  const sha = await fetchBranchSha(owner, repo, branch);
-  if (!sha) return [];
+async function listAllPaths(
+  owner: string,
+  repo: string,
+  branch: string,
+): Promise<{ paths: string[]; resolvedRef?: string }> {
+  const info = await fetchBranchSha(owner, repo, branch);
+  if (!info) return { paths: [], resolvedRef: undefined };
 
   const baseUrl = getGithubApiUrl();
   const headers = buildGithubHeaders();
-  const url = `${baseUrl}/repos/${owner}/${repo}/git/trees/${sha}?recursive=1`;
+  const url = `${baseUrl}/repos/${owner}/${repo}/git/trees/${info.sha}?recursive=1`;
 
   const res = await fetch(url, { headers });
   if (!res.ok) {
@@ -47,7 +63,7 @@ async function listAllPaths(owner: string, repo: string, branch: string): Promis
         200,
       )}...)`,
     );
-    return [];
+    return { paths: [], resolvedRef: info.resolvedRef };
   }
 
   const data = (await res.json()) as { tree?: Array<{ path?: string; type?: string }> };
@@ -58,7 +74,7 @@ async function listAllPaths(owner: string, repo: string, branch: string): Promis
         path: i.path!,
         type: i.type!,
       })) ?? [];
-  return tree.map(i => i.path);
+  return { paths: tree.map(i => i.path), resolvedRef: info.resolvedRef };
 }
 
 async function fetchRemoteRaw(owner: string, repo: string, branch: string, pathInRepo: string) {
@@ -84,7 +100,7 @@ export const fetchRemoteTree: FetcherFn = async (ctx, scanners: ScannerEntry[]):
   const { owner, repo, branch } = ctx;
   const files: FileToAnalyze[] = [];
 
-  const allPaths = await listAllPaths(owner, repo, branch);
+  const { paths: allPaths, resolvedRef } = await listAllPaths(owner, repo, branch);
   if (!allPaths.length) return files;
 
   const limit = pLimit(5);
@@ -106,6 +122,8 @@ export const fetchRemoteTree: FetcherFn = async (ctx, scanners: ScannerEntry[]):
               analyzer,
               filename: p,
               source,
+              requestedBranch: branch,
+              resolvedBranch: resolvedRef,
               content,
             } as FileToAnalyze;
           }),

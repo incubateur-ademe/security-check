@@ -61,3 +61,26 @@ export const log = {
     logger("debug", msg, meta);
   },
 };
+
+import { Console } from "console";
+import { Transform } from "stream";
+
+const ts = new Transform({ transform: (chunk, _, cb) => cb(null, chunk) });
+const _logger = new Console({ stdout: ts, stderr: ts, colorMode: false });
+
+const getProxy = (c: Console) =>
+  new Proxy(c, {
+    get: (target, p, receiver) =>
+      Reflect.has(target, p) ? getProxy(Reflect.get(target, p, receiver) as Console) : undefined,
+    apply: (target, thisArg, argArray) => {
+      Reflect.apply(target as never, thisArg, argArray);
+      return ((ts.read() as string) ?? "").toString();
+    },
+  });
+
+// make a type based on Console, but each method returns string
+type ConsoleString = {
+  [K in keyof Console]: Console[K] extends (...args: infer A) => void ? (...args: A) => string : never;
+};
+
+export const consoleString = getProxy(_logger) as ConsoleString;
