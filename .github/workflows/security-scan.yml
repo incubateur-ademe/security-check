@@ -1,0 +1,54 @@
+name: Security Scan
+
+on:
+  schedule:
+    # Runs every 8 hours
+    - cron: "0 */8 * * *"
+  workflow_dispatch:
+    inputs:
+      repos:
+        description: "Repository to scan (format: owner/repo)"
+        required: false
+      orgs:
+        description: "Organizations to scan (comma-separated)"
+        required: false
+        default: "incubateur-ademe"
+      verbose:
+        description: "Verbose output"
+        required: false
+        type: boolean
+        default: true
+      all-branches:
+        description: "Scan all branches"
+        required: false
+        type: boolean
+        default: true
+      root-only:
+        description: "Scan only the root directory"
+        required: false
+        type: boolean
+        default: false
+
+# Permissions strictes : read-only
+permissions:
+  contents: read
+  issues: write # Si vous voulez créer des issues pour les vulnérabilités
+
+jobs:
+  scan:
+    name: Run Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run security scan
+        uses: ./.github/actions/security-scan
+        with:
+          repos: ${{ github.event.inputs.repos || '' }}
+          orgs: ${{ github.event.inputs.orgs || 'incubateur-ademe' }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          verbose: ${{ github.event.inputs.verbose || 'true' }}
+          all-branches: ${{ github.event.inputs.all-branches || 'true' }}
+          root-only: ${{ github.event.inputs.root-only || 'false' }}

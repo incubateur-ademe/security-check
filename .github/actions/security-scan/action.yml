@@ -1,0 +1,90 @@
+name: "Security Scan"
+description: "Scan repositories for security vulnerabilities in dependencies"
+author: "ADEME"
+
+inputs:
+  repos:
+    description: "Comma-separated list of repositories to scan (format: owner/repo)"
+    required: false
+  orgs:
+    description: "Comma-separated list of organizations to scan"
+    required: false
+  token:
+    description: "GitHub token for API access (read-only recommended)"
+    required: true
+  verbose:
+    description: "Enable verbose output"
+    required: false
+    default: "false"
+  all-branches:
+    description: "Scan all branches instead of just the default branch"
+    required: false
+    default: "false"
+  root-only:
+    description: "Scan only the root directory of each repository"
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout security-check repository
+      uses: actions/checkout@v4
+      with:
+        repository: incubateur-ademe/security-check
+        ref: main
+        path: .security-check
+        persist-credentials: false
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version-file: .security-check/.nvmrc
+        cache: "yarn"
+        cache-dependency-path: .security-check/yarn.lock
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: .security-check
+      run: yarn install --frozen-lockfile --ignore-scripts
+
+    - name: Run security scan
+      shell: bash
+      working-directory: .security-check
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        NODE_ENV: production
+      run: |
+        # Validation des inputs
+        if [ -z "${{ inputs.repos }}" ] && [ -z "${{ inputs.orgs }}" ]; then
+            echo "Error: Either repos or orgs must be provided"
+            exit 1
+        fi
+
+        CMD="yarn tsx src/shai-hulud/index.ts"
+
+        if [ -n "${{ inputs.repos }}" ]; then
+            CMD="$CMD --repos ${{ inputs.repos }}"
+        fi
+
+        if [ -n "${{ inputs.orgs }}" ]; then
+            CMD="$CMD --orgs ${{ inputs.orgs }}"
+        fi
+
+        if [ "${{ inputs.verbose }}" = "true" ]; then
+            CMD="$CMD -vvv"
+        fi
+
+        if [ "${{ inputs.all-branches }}" = "true" ]; then
+            CMD="$CMD --all-branches"
+        fi
+
+        if [ "${{ inputs.root-only }}" != "true" ]; then
+            CMD="$CMD --no-root-only"
+        fi
+
+        eval $CMD
+
+branding:
+  icon: "shield"
+  color: "green"
